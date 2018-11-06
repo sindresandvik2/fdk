@@ -7,8 +7,8 @@ spring:
       clusterName: ${FDK_ES_CLUSTERNAME:elasticsearch}
 
 logging:
-  level.root: WARN
-  level.no.acat: ${LOG_LEVEL:INFO}
+  level: WARN
+  level.no.ccat: ${LOG_LEVEL:INFO}
   level.org.springframework: WARN
   level.org.springframework.web: WARN
 server:

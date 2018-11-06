@@ -13,3 +13,4 @@ public interface ConceptDenormalizedRepository
     List<ConceptDenormalized> findByHarvestSourceUri(String harvestSourceUri);
 
 }
+
