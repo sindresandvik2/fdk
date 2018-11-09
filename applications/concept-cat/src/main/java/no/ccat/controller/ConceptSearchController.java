@@ -4,7 +4,9 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import no.ccat.hateoas.PagedResourceWithAggregations;
 import no.ccat.model.ConceptDenormalized;
-import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
@@ -24,8 +26,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.elasticsearch.index.query.QueryBuilders.simpleQueryStringQuery;
 
 @CrossOrigin
 @RestController
@@ -49,16 +49,29 @@ public class ConceptSearchController {
         @ApiParam("The query text")
         @RequestParam(value = "q", defaultValue = "", required = false)
             String query,
+
+        @ApiParam("Filters on publisher's organization path (orgPath), e.g. /STAT/972417858/971040238")
+        @RequestParam(value = "orgPath", defaultValue = "", required = false)
+            String orgPath,
+
         @ApiParam("Calculate aggregations")
         @RequestParam(value = "aggregations", defaultValue = "false", required = false)
             String includeAggregations,
+
         Pageable pageable
     ) {
         logger.info("/search q={}", query);
 
-        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
-            .withQuery(simpleQueryStringQuery(query))
-            .withSearchType(SearchType.DEFAULT)
+        QueryBuilder searchQuery = query.isEmpty() ? QueryBuilders.matchAllQuery() : QueryBuilders.simpleQueryStringQuery(query);
+
+        BoolQueryBuilder composedQuery = QueryBuilders.boolQuery().must(searchQuery);
+
+        if (!orgPath.isEmpty()) {
+            composedQuery.filter(QueryUtil.createTermFilter("publisher.orgPath", orgPath));
+        }
+
+        NativeSearchQuery finalQuery = new NativeSearchQueryBuilder()
+            .withQuery(composedQuery)
             .withIndices("ccat").withTypes("concept")
             .withPageable(pageable)
             .build();
@@ -71,10 +84,10 @@ public class ConceptSearchController {
                 .size(MAX_AGGREGATIONS)
                 .order(Terms.Order.count(false));
 
-            searchQuery.addAggregation(aggregationBuilder);
+            finalQuery.addAggregation(aggregationBuilder);
         }
 
-        AggregatedPage<ConceptDenormalized> aggregatedPage = elasticsearchTemplate.queryForPage(searchQuery, ConceptDenormalized.class);
+        AggregatedPage<ConceptDenormalized> aggregatedPage = elasticsearchTemplate.queryForPage(finalQuery, ConceptDenormalized.class);
         List<ConceptDenormalized> concepts = aggregatedPage.getContent();
 
         PagedResources.PageMetadata pageMetadata = new PagedResources.PageMetadata(
@@ -90,6 +103,14 @@ public class ConceptSearchController {
             return ResponseUtil.addAggregations(conceptResources, aggregatedPage);
         } else {
             return conceptResources;
+        }
+    }
+
+    static class QueryUtil {
+        static QueryBuilder createTermFilter(String term, String value) {
+            return value.equals(MISSING) ?
+                QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(term)) :
+                QueryBuilders.termQuery(term, value);
         }
     }
 
