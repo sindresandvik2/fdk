@@ -18,6 +18,7 @@ import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.hateoas.PagedResources;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -77,6 +78,45 @@ public class PublisherQueryService extends ElasticsearchService {
         return new ResponseEntity<>(responsePublisher.toString(), HttpStatus.OK);
     }
 
+    /**
+     * Finds all publishers loaded into elasticsearch in json-hal format
+     * <p/>
+     *
+     * @return Json-format is returned..
+     */
+    @CrossOrigin
+    @ApiOperation(value = "Query for publishers.",
+        notes = "Returns the elasticsearch response with matching publishers", response = Publisher.class)
+    @RequestMapping(value = QUERY_PUBLISHER, method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    public PagedResources<Publisher> publishersHal(
+        @ApiParam("A query string to match a publisher name")
+        @RequestParam(value = "q", defaultValue = "", required = false) String query) {
+        logger.info("/publisher query: {}", query);
+
+        ResponseEntity<String> jsonError = initializeElasticsearchTransportClient();
+        if (jsonError != null) return jsonError;
+
+        QueryBuilder search;
+
+        if ("".equals(query)) {
+            search = QueryBuilders.matchAllQuery();
+        } else {
+            search = QueryBuilders.matchPhrasePrefixQuery("name", query);
+        }
+
+        SearchRequestBuilder searchQuery = getClient().prepareSearch(INDEX_DCAT).setTypes(TYPE_DATA_PUBLISHER).setQuery(search);
+        SearchResponse responseSize = searchQuery.execute().actionGet();
+
+        int totNrOfPublisher = (int) responseSize.getHits().getTotalHits();
+        logger.debug("Found total number of publisher: {}", totNrOfPublisher);
+
+        SearchResponse responsePublisher = searchQuery.setSize(totNrOfPublisher).execute().actionGet();
+        logger.debug("Found publisher: {}", responsePublisher);
+
+        return new ResponseEntity<>(responsePublisher.toString(), HttpStatus.OK);
+        return assembler.toResource(apiRegistrationPublicsPage);
+
+    }
     /**
      * Retrieves the publisher record identified by the provided orgnr.
      *
