@@ -1,6 +1,6 @@
 package no.dcat.service;
 
-import no.dcat.client.apicat.ApiCatClient;
+import no.dcat.client.publisherapi.ApiCatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
